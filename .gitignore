@@ -1,0 +1,32 @@
+# Python
+.venv/
+venv/
+.uv-cache/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.pyc
+*.log
+
+# Environment variables and credentials
+.env
+.env.*
+!.env.example
+
+# Streamlit secrets
+.streamlit/secrets.toml
+
+# Local data and generated files
+outputs/
+local-data/
+local_data/
+deliverables/
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Operating system
+.DS_Store
+Thumbs.db

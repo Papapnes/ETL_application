@@ -1,0 +1,94 @@
+{
+  "deduplicate": true,
+  "duplicate_keys": [
+    "commande"
+  ],
+  "expected_columns": [
+    "commande",
+    "client",
+    "region",
+    "montant",
+    "date",
+    "statut"
+  ],
+  "name": "Préparation des ventes",
+  "null_markers": [
+    ""
+  ],
+  "rules": [
+    {
+      "case": "Conserver",
+      "column": "commande",
+      "date_format": "%Y-%m-%d",
+      "decimal": ".",
+      "fill": "",
+      "maximum": "",
+      "minimum": "",
+      "required": true,
+      "target": "commande",
+      "type": "Texte"
+    },
+    {
+      "case": "Conserver",
+      "column": "client",
+      "date_format": "%Y-%m-%d",
+      "decimal": ".",
+      "fill": "",
+      "maximum": "",
+      "minimum": "",
+      "required": true,
+      "target": "client",
+      "type": "Texte"
+    },
+    {
+      "case": "Conserver",
+      "column": "region",
+      "date_format": "%Y-%m-%d",
+      "decimal": ".",
+      "fill": "",
+      "maximum": "",
+      "minimum": "",
+      "required": false,
+      "target": "region",
+      "type": "Texte"
+    },
+    {
+      "case": "Conserver",
+      "column": "montant",
+      "date_format": "%Y-%m-%d",
+      "decimal": ",",
+      "fill": "",
+      "maximum": "",
+      "minimum": "0",
+      "required": true,
+      "target": "montant",
+      "type": "Décimal"
+    },
+    {
+      "case": "Conserver",
+      "column": "date",
+      "date_format": "%Y-%m-%d",
+      "decimal": ".",
+      "fill": "",
+      "maximum": "",
+      "minimum": "",
+      "required": true,
+      "target": "date",
+      "type": "Date"
+    },
+    {
+      "case": "Minuscules",
+      "column": "statut",
+      "date_format": "%Y-%m-%d",
+      "decimal": ".",
+      "fill": "",
+      "maximum": "",
+      "minimum": "",
+      "required": false,
+      "target": "statut",
+      "type": "Texte"
+    }
+  ],
+  "trim": true,
+  "version": 1
+}

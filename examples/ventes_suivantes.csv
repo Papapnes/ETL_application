@@ -1,0 +1,4 @@
+﻿commande;client;region;montant;date;statut
+0101;Atelier Nord;Quebec;200,50;2026-02-01;PAYE
+0102;Studio Rivage;Montreal;320,00;2026-02-02;PAYE
+0103;Maison Lune;Ottawa;140,00;2026-02-03;PAYE

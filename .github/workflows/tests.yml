@@ -1,0 +1,14 @@
+name: Verification
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked --python 3.14
+      - run: uv run pytest -q
+      - run: uv run ruff check app.py etl ui tests scripts
+      - run: uv run ruff format --check app.py etl ui tests scripts
