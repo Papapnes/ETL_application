@@ -9,6 +9,7 @@ from uuid import uuid4
 import pandas as pd
 import streamlit as st
 
+from accounts.errors import DatabaseError
 from accounts.service import AccountError
 from etl.demo import CSV, demo
 from etl.engine import (
@@ -61,7 +62,11 @@ ss.setdefault("language", "fr")
 if "pending_stage" in ss:
     ss.stage = ss.pop("pending_stage")
 user = current_user()
-quota = service().quota(ss.auth_token) if user else None
+try:
+    quota = service().quota(ss.auth_token) if user else None
+except DatabaseError as exc:
+    st.error(str(exc))
+    st.stop()
 STAGES = [
     "Vue d’ensemble",
     "1 · Importer",

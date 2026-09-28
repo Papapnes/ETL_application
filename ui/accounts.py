@@ -2,8 +2,10 @@ from functools import partial
 
 import pandas as pd
 import streamlit as st
+from streamlit.errors import StreamlitSecretNotFoundError
 
-from accounts.config import database_path, send_reset_email, smtp_ready
+from accounts.config import database_config, send_reset_email, smtp_ready
+from accounts.errors import DatabaseError
 from accounts.service import AccountError, Accounts
 from ui.i18n import translate
 
@@ -14,7 +16,15 @@ def _service(path):
 
 
 def service():
-    return _service(database_path())
+    try:
+        try:
+            runtime_secrets = dict(st.secrets)
+        except StreamlitSecretNotFoundError:
+            runtime_secrets = {}
+        return _service(database_config(runtime_secrets=runtime_secrets))
+    except DatabaseError as exc:
+        st.error(str(exc))
+        st.stop()
 
 
 def clear_private_state():
@@ -36,6 +46,9 @@ def current_user():
         return None
     try:
         return service().identity(token)
+    except DatabaseError as exc:
+        st.error(str(exc))
+        st.stop()
     except AccountError:
         clear_private_state()
         st.rerun()

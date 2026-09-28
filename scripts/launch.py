@@ -1,5 +1,6 @@
 """Start this checkout on an available local port, never reuse a stale server."""
 
+import os
 import socket
 import subprocess
 import sys
@@ -38,6 +39,9 @@ def command(port):
 
 
 def main():
+    # Local-only launcher: cloud starts app.py directly and remains fail-closed.
+    if not os.environ.get("DATAFLOW_DATABASE_URL") and not (ROOT / ".streamlit" / "secrets.toml").exists():
+        os.environ.setdefault("DATAFLOW_DB_BACKEND", "sqlite")
     port = available_port()
     print(f"Application : {ROOT}", flush=True)
     if port != 8501:

@@ -21,6 +21,7 @@ files = [
 for directory, pattern in (
     ("etl", "*.py"),
     ("accounts", "*.py"),
+    ("accounts/migrations", "*.sql"),
     ("ui", "*.py"),
     ("tests", "*.py"),
     ("scripts", "*.py"),

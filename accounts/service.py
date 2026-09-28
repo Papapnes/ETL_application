@@ -3,10 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import secrets
-import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, time, timedelta, timezone
-from pathlib import Path
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -14,57 +12,13 @@ from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
 from email_validator import EmailNotValidError, validate_email
 
+from accounts.database import Database
 from etl.engine import run
 
 TORONTO = ZoneInfo("America/Toronto")
 HASHER = PasswordHasher(time_cost=3, memory_cost=65536, parallelism=2)
 DUMMY_HASH = HASHER.hash(secrets.token_urlsafe(32))
 PUBLIC_USER = "user_id, full_name, email, role, account_status, custom_daily_limit, created_at"
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS schema_version(version INTEGER PRIMARY KEY);
-INSERT OR IGNORE INTO schema_version VALUES(1);
-CREATE TABLE IF NOT EXISTS plans(
-    plan_id TEXT PRIMARY KEY,
-    plan_name TEXT NOT NULL UNIQUE CHECK(plan_name IN ('FREE','PRO','ADMIN')),
-    daily_limit INTEGER CHECK(daily_limit >= 0),
-    is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0,1)),
-    CHECK((plan_name='ADMIN' AND daily_limit IS NULL) OR (plan_name!='ADMIN' AND daily_limit IS NOT NULL))
-);
-INSERT OR IGNORE INTO plans VALUES('free','FREE',5,1);
-INSERT OR IGNORE INTO plans VALUES('pro','PRO',50,1);
-INSERT OR IGNORE INTO plans VALUES('admin','ADMIN',NULL,1);
-CREATE TABLE IF NOT EXISTS users(
-    user_id TEXT PRIMARY KEY, full_name TEXT NOT NULL,
-    email TEXT NOT NULL UNIQUE COLLATE NOCASE, password_hash TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'FREE' REFERENCES plans(plan_name),
-    account_status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(account_status IN ('ACTIVE','DISABLED')),
-    custom_daily_limit INTEGER CHECK(custom_daily_limit >= 0),
-    created_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS sessions(
-    token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(user_id),
-    created_at REAL NOT NULL, expires_at REAL NOT NULL, last_seen REAL NOT NULL
-);
-CREATE TABLE IF NOT EXISTS password_resets(
-    token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(user_id),
-    expires_at REAL NOT NULL, used_at REAL
-);
-CREATE TABLE IF NOT EXISTS usage(
-    usage_id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(user_id),
-    execution_id TEXT NOT NULL, execution_date TEXT NOT NULL,
-    execution_status TEXT NOT NULL CHECK(execution_status IN ('RUNNING','SUCCESS','FAILED')),
-    created_at TEXT NOT NULL, finished_at TEXT, error_code TEXT,
-    UNIQUE(user_id,execution_id)
-);
-CREATE INDEX IF NOT EXISTS usage_daily ON usage(user_id,execution_date,execution_status);
-CREATE TABLE IF NOT EXISTS rate_limits(
-    bucket TEXT PRIMARY KEY, started_at REAL NOT NULL, attempts INTEGER NOT NULL
-);
-CREATE TABLE IF NOT EXISTS audit_log(
-    audit_id TEXT PRIMARY KEY, actor_id TEXT NOT NULL REFERENCES users(user_id),
-    action TEXT NOT NULL, target_id TEXT, details TEXT NOT NULL, created_at TEXT NOT NULL
-);
-"""
 
 
 class AccountError(ValueError):
@@ -91,35 +45,19 @@ def validate_password(value):
 
 class Accounts:
     def __init__(self, path, clock=None):
-        self.path = str(Path(path).resolve())
+        self.database = Database(path)
         self.clock = clock or (lambda: datetime.now(timezone.utc))
-        Path(self.path).parent.mkdir(parents=True, exist_ok=True)
-        with self.connection() as db:
-            db.execute("PRAGMA journal_mode=WAL")
-            db.executescript(SCHEMA)
-            if db.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] != 1:
-                raise RuntimeError("Unsupported accounts schema version")
+        self.database.check_schema()
 
     @contextmanager
     def connection(self):
-        db = sqlite3.connect(self.path, timeout=30, isolation_level=None)
-        db.row_factory = sqlite3.Row
-        db.execute("PRAGMA foreign_keys=ON")
-        try:
+        with self.database.connection() as db:
             yield db
-        finally:
-            db.close()
 
     @contextmanager
     def transaction(self):
-        with self.connection() as db:
-            db.execute("BEGIN IMMEDIATE")
-            try:
-                yield db
-                db.commit()
-            except BaseException:
-                db.rollback()
-                raise
+        with self.database.transaction() as db:
+            yield db
 
     def now(self):
         value = self.clock()
@@ -133,7 +71,10 @@ class Accounts:
         with self.transaction() as db:
             row = db.execute("SELECT * FROM rate_limits WHERE bucket=?", (bucket,)).fetchone()
             if row is None or row["started_at"] + seconds <= now:
-                db.execute("INSERT OR REPLACE INTO rate_limits VALUES(?,?,1)", (bucket, now))
+                db.execute(
+                    "INSERT INTO rate_limits VALUES(?,?,1) ON CONFLICT(bucket) DO UPDATE SET started_at=excluded.started_at,attempts=1",
+                    (bucket, now),
+                )
             elif row["attempts"] >= limit:
                 raise AccountError("Trop de tentatives. Réessayez dans 15 minutes.")
             else:
@@ -157,10 +98,12 @@ class Accounts:
         validate_password(password)
         hashed = HASHER.hash(password)
         with self.transaction() as db:
-            if not db.execute("SELECT is_active FROM plans WHERE plan_name='FREE'").fetchone()[0]:
+            if not db.execute("SELECT is_active AS value FROM plans WHERE plan_name='FREE'").fetchone()[
+                "value"
+            ]:
                 raise AccountError("Les inscriptions sont temporairement suspendues.")
             # Never accept a role, status, quota or user ID from the registration form.
-            if db.execute("SELECT 1 FROM users WHERE email=?", (email,)).fetchone():
+            if db.execute("SELECT 1 FROM users WHERE lower(email)=?", (email,)).fetchone():
                 return
             self._new_user(db, name, email, hashed)
 
@@ -175,7 +118,7 @@ class Accounts:
         with self.transaction() as db:
             if db.execute("SELECT 1 FROM users WHERE role='ADMIN'").fetchone():
                 raise AccountError("Un administrateur existe déjà. Utilisez son espace de gestion.")
-            if db.execute("SELECT 1 FROM users WHERE email=?", (email,)).fetchone():
+            if db.execute("SELECT 1 FROM users WHERE lower(email)=?", (email,)).fetchone():
                 raise AccountError(
                     "Cette adresse existe déjà. Choisissez une adresse administrateur distincte."
                 )
@@ -189,7 +132,7 @@ class Accounts:
         candidate = str(email).strip().casefold()[:254]
         self._rate_limit("login-email", candidate, 10)
         with self.connection() as db:
-            row = db.execute("SELECT * FROM users WHERE email=?", (candidate,)).fetchone()
+            row = db.execute("SELECT * FROM users WHERE lower(email)=?", (candidate,)).fetchone()
         hashed = row["password_hash"] if row else DUMMY_HASH
         supplied = password if isinstance(password, str) and len(password) <= 128 else ""
         try:
@@ -334,7 +277,8 @@ class Accounts:
         token = secrets.token_urlsafe(32)
         with self.transaction() as db:
             user = db.execute(
-                "SELECT user_id,email FROM users WHERE email=? AND account_status='ACTIVE'", (candidate,)
+                "SELECT user_id,email FROM users WHERE lower(email)=? AND account_status='ACTIVE'",
+                (candidate,),
             ).fetchone()
             if not user:
                 return
@@ -397,8 +341,8 @@ class Accounts:
                 and (role != "ADMIN" or status != "ACTIVE")
             ):
                 count = db.execute(
-                    "SELECT COUNT(*) FROM users WHERE role='ADMIN' AND account_status='ACTIVE'"
-                ).fetchone()[0]
+                    "SELECT COUNT(*) AS value FROM users WHERE role='ADMIN' AND account_status='ACTIVE'"
+                ).fetchone()["value"]
                 if count <= 1:
                     raise AccountError("Le dernier administrateur actif ne peut pas être retiré.")
             custom_limit = None if role == "ADMIN" else custom_limit
@@ -450,9 +394,9 @@ class Accounts:
                     remaining=quota["remaining"],
                 )
                 user["total_runs"] = db.execute(
-                    "SELECT COUNT(*) FROM usage WHERE user_id=? AND execution_status='SUCCESS'",
+                    "SELECT COUNT(*) AS value FROM usage WHERE user_id=? AND execution_status='SUCCESS'",
                     (user["user_id"],),
-                ).fetchone()[0]
+                ).fetchone()["value"]
             plans = [dict(row) for row in db.execute("SELECT * FROM plans")]
             return dict(users=users, plans=plans)
 
