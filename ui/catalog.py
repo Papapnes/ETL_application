@@ -10,8 +10,8 @@ Vue d’ensemble|||Overview|||نظرة عامة
 3 · Contrôler|||3 · Review|||3 · المراجعة
 4 · Exporter|||4 · Export|||4 · التصدير
 Journal|||Run history|||سجل العمليات
-Traitement local|||Local processing|||معالجة محلية
-Vos fichiers restent sur ce poste. Téléchargez vos recettes pour les conserver entre les sessions.|||Your files stay on this computer. Download your recipes to keep them between sessions.|||تبقى ملفاتك على هذا الجهاز. نزّل وصفات المعالجة للاحتفاظ بها بين الجلسات.
+Traitement des données|||Data processing|||معالجة البيانات
+Les fichiers sont traités sur le serveur de l’application. Téléchargez vos résultats et vos recettes pour les conserver.|||Files are processed on the application server. Download your results and recipes to keep them.|||تُعالَج الملفات على خادم التطبيق. نزّل نتائجك ووصفات المعالجة للاحتفاظ بها.
 Version 0.2 · Édition de démonstration|||Version 0.2 · Demo edition|||الإصدار 0.2 · نسخة تجريبية
 Vider la session|||Clear session|||مسح الجلسة
 :material/science: Mode démonstration · données fictives, aucune donnée client|||:material/science: Demo mode · synthetic data, no client data|||:material/science: وضع العرض التجريبي · بيانات افتراضية، دون بيانات عملاء

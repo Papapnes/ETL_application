@@ -154,10 +154,10 @@ with st.sidebar:
                     else t("Utilisations restantes") + f" : {quota['remaining']} / {quota['limit']}"
                 )
                 st.button(t("Se déconnecter"), on_click=sign_out, key="logout")
-            st.badge(t("Traitement local"), icon=":material/lock:", color="green")
+            st.badge(t("Traitement des données"), icon=":material/settings:", color="green")
             st.caption(
                 t(
-                    "Vos fichiers restent sur ce poste. Téléchargez vos recettes pour les conserver entre les sessions."
+                    "Les fichiers sont traités sur le serveur de l’application. Téléchargez vos résultats et vos recettes pour les conserver."
                 )
             )
             st.caption(t("Version 0.2 · Édition de démonstration"))
