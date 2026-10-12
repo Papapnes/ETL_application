@@ -26,7 +26,6 @@ from etl.engine import (
     validate_recipe,
 )
 from ui.accounts import (
-    account_database_error,
     account_page,
     admin_page,
     auth_page,
@@ -73,7 +72,7 @@ user = current_user()
 # The ETL workspace must remain usable when the optional account backend is
 # paused or temporarily unavailable.
 account_service = service()
-account_db_error = account_database_error()
+account_db_error = st.session_state.get("_account_database_error")
 quota = None
 if user and account_service is not None:
     try:
