@@ -37,3 +37,49 @@ jobs:
             --output /dev/null \
             --write-out "HTTP %{http_code}\n" \
             "${APP_URL}"
+
+  notify:
+    name: Notify monitoring failure
+    if: ${{ failure() }}
+    needs: availability
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Create or update GitHub alert
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = "[Monitoring] Une application est indisponible";
+            const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            const body = [
+              "Le contrôle quotidien a détecté une erreur sur au moins une application.",
+              "",
+              `Consultez les détails du contrôle : ${runUrl}`,
+              "",
+              "Applications surveillées : CVMatch Pro, Dax Flow et Dataflow Studio.",
+            ].join("\\n");
+
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              per_page: 100,
+            });
+            const existing = issues.find(issue => issue.title === title);
+
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+              });
+            }
