@@ -1,0 +1,39 @@
+name: Monitor deployed applications
+
+on:
+  schedule:
+    # Daily at 13:17 UTC (09:17 Toronto during daylight time).
+    - cron: "17 13 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  availability:
+    name: Check ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: CVMatch Pro
+            url: https://cvmatch-pro.vercel.app/login
+          - name: Dax Flow
+            url: https://dax-flow.onrender.com/
+          - name: Dataflow Studio
+            url: https://dataflow-studio.streamlit.app/
+    steps:
+      - name: Check public URL
+        env:
+          APP_NAME: ${{ matrix.name }}
+          APP_URL: ${{ matrix.url }}
+        run: |
+          set -euo pipefail
+          echo "Checking ${APP_NAME}: ${APP_URL}"
+          curl --location --fail --silent --show-error \
+            --max-time 90 \
+            --retry 2 --retry-delay 5 \
+            --output /dev/null \
+            --write-out "HTTP %{http_code}\n" \
+            "${APP_URL}"
