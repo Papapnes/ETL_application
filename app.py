@@ -25,7 +25,15 @@ from etl.engine import (
     profile,
     validate_recipe,
 )
-from ui.accounts import account_page, admin_page, auth_page, current_user, service, sign_out
+from ui.accounts import (
+    account_database_error,
+    account_page,
+    admin_page,
+    auth_page,
+    current_user,
+    service,
+    sign_out,
+)
 from ui.i18n import LANGUAGES, display_metadata, display_rejections, translate
 from ui.layout import render_contact, render_styles
 
@@ -62,11 +70,16 @@ ss.setdefault("language", "fr")
 if "pending_stage" in ss:
     ss.stage = ss.pop("pending_stage")
 user = current_user()
-try:
-    quota = service().quota(ss.auth_token) if user else None
-except DatabaseError as exc:
-    st.error(str(exc))
-    st.stop()
+# The ETL workspace must remain usable when the optional account backend is
+# paused or temporarily unavailable.
+account_service = service()
+account_db_error = account_database_error()
+quota = None
+if user and account_service is not None:
+    try:
+        quota = account_service.quota(ss.auth_token)
+    except DatabaseError as exc:
+        account_db_error = str(exc)
 STAGES = [
     "Vue d’ensemble",
     "1 · Importer",
@@ -145,7 +158,7 @@ with st.sidebar:
                 render_platform_title(selected_language, location="sidebar")
             st.set_page_config(page_title=platform_name)
             st.caption(t("VOTRE ESPACE DE PRÉPARATION"))
-            if user:
+            if user and quota is not None:
                 st.radio(t("Parcours"), STAGES, key="stage", label_visibility="collapsed", format_func=t)
                 st.caption(user["full_name"] + " · " + user["role"])
                 st.caption(
@@ -165,10 +178,16 @@ with st.sidebar:
                 st.button(t("Vider la session"), on_click=reset, icon=":material/restart_alt:")
         render_contact(ss.language)
 render_styles(ss.language)
-if not user:
+if not user and not account_db_error:
     render_platform_title(selected_language)
     auth_page(ss.language)
     st.stop()
+if not user and account_db_error:
+    render_platform_title(selected_language)
+    st.info(
+        "Mode traitement sans compte : importez et préparez vos fichiers. "
+        "La connexion et les quotas seront disponibles dès le retour de la base des comptes."
+    )
 if ss.stage == "Mon compte":
     account_page(ss.language)
     st.stop()

@@ -9,6 +9,8 @@ from accounts.errors import DatabaseError
 from accounts.service import AccountError, Accounts
 from ui.i18n import translate
 
+ACCOUNT_DATABASE_ERROR = "_account_database_error"
+
 
 @st.cache_resource
 def _service(path):
@@ -21,10 +23,18 @@ def service():
             runtime_secrets = dict(st.secrets)
         except StreamlitSecretNotFoundError:
             runtime_secrets = {}
-        return _service(database_config(runtime_secrets=runtime_secrets))
+        account_service = _service(database_config(runtime_secrets=runtime_secrets))
+        st.session_state.pop(ACCOUNT_DATABASE_ERROR, None)
+        return account_service
     except DatabaseError as exc:
-        st.error(str(exc))
-        st.stop()
+        # File processing remains available if the optional account backend
+        # is paused or temporarily unavailable.
+        st.session_state[ACCOUNT_DATABASE_ERROR] = str(exc)
+        return None
+
+
+def account_database_error():
+    return st.session_state.get(ACCOUNT_DATABASE_ERROR)
 
 
 def clear_private_state():
@@ -44,8 +54,12 @@ def current_user():
     token = st.session_state.get("auth_token")
     if not token:
         return None
+    account_service = service()
+    if account_service is None:
+        st.session_state.pop("auth_token", None)
+        return None
     try:
-        return service().identity(token)
+        return account_service.identity(token)
     except DatabaseError as exc:
         st.error(str(exc))
         st.stop()
