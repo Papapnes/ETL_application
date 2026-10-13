@@ -22,7 +22,8 @@ jobs:
           - name: Dax Flow
             url: https://dax-flow.onrender.com/
           - name: Dataflow Studio
-            url: https://dataflow-studio.streamlit.app/
+            # Streamlit's health endpoint avoids the app shell's redirect loop.
+            url: https://dataflow-studio.streamlit.app/_stcore/health
     steps:
       - name: Check public URL
         env:
@@ -58,7 +59,7 @@ jobs:
               `Consultez les détails du contrôle : ${runUrl}`,
               "",
               "Applications surveillées : CVMatch Pro, Dax Flow et Dataflow Studio.",
-            ].join("\\n");
+            ].join("\n");
 
             const { data: issues } = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
